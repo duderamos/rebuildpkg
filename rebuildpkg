@@ -1,0 +1,45 @@
+#!/bin/bash
+
+CWD=`pwd`
+
+if [ "`whoami`" != "root" ]; then
+	echo "You have to be root!"
+	exit
+fi
+
+ret=`removepkg --copy $1`
+if [ "$(echo $ret | grep -c 'No such package')" -gt "0" ]; then
+        echo "No such package"
+        exit
+fi
+
+cd /var/log/setup/tmp/preserved_packages/$1*
+
+PACKNAME_LONG=`basename $PWD`
+
+cat /var/log/packages/$PACKNAME_LONG | sed -e '1,/PACKAGE DESCRIPTION:/d;/FILE LIST:/,$d' > install/slack-desc
+
+missing=0
+while read f; do
+        if ! [ -e "$f" ]; then
+                echo "Missing file - $f"
+                missing=1
+        fi
+done << EOF
+$(cat /var/log/packages/$PACKNAME_LONG | sed -e '1,/FILE LIST:/d')
+EOF
+
+if [ "$missing" -eq "1" ]; then
+        echo "Do you want to continue? (y/n)"
+        read ans
+        case $ans in
+                [Nn])
+                        exit
+                        ;;
+        esac
+fi
+
+makepkg -l y -c n /tmp/`basename $PWD`.txz
+
+cd $CWD
+rm -rf /var/log/setup/tmp/preserved_packages/$PACKNAME_LONG
